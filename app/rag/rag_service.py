@@ -183,37 +183,22 @@ from dotenv import load_dotenv
 from fastapi import UploadFile
 from tempfile import NamedTemporaryFile
 from typing import List
-from opensearchpy import OpenSearch
+from opensearchpy import OpenSearch # OpenSearch klientini yaratmaq üçün
 
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import OpenSearchVectorSearch
+from langchain_community.vectorstores import OpenSearchVectorSearch # Vektor bazası üçün
 
 load_dotenv()
 
 # ---- Konfiqurasiya ----
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-# OS_HOST = os.getenv("OS_HOST", "localhost")
-# OS_PORT = int(os.getenv("OS_PORT", 9200))
-# OS_USER = os.getenv("OS_USER", "admin")
-# OS_PASS = os.getenv("OS_PASS", "StrongP@ss123")
 
-HOST = os.getenv("OPENSEARCH_HOSTS")
-PORT = int(os.getenv("OPENSEARCH_PORT"))
-USER = os.getenv("OPENSEARCH_USER")
-PASSWORD = os.getenv("OPENSEARCH_PASSWORD")
 
-# 2. OpenSearch klientini yaratmaq (Ayrı-ayrı dəyərlərlə)
-client = OpenSearch(
-    hosts=[{'host': HOST, 'port': PORT}],
-    http_auth=(USER, PASSWORD),
-    use_ssl=True,
-    # verify_certs-i False etmək bəzən App Platformda SSL xətalarını aradan qaldırır.
-    verify_certs=False,
-    ssl_assert_hostname=False,
-    ssl_show_warn=False
-)
+client = None # Global client-i None olaraq təyin edirik ki, tətbiq işə düşə bilsin
+# ----------------------------------------------------------------------------------
+
 
 # İki fərqli indeksin adı
 INDEX_NAME = "rag_knowledge_base"  # İstifadəçi faylları
@@ -248,20 +233,34 @@ def create_llm_client(api_key: str):
     )
 
 
-# --- OPENSEARCH KLİENTİNİN YARADILMASI ---
+# --- OPENSEARCH KLİENTİNİN YARADILMASI (DÜZGÜN VERSİYA) ---
 
 def get_opensearch_client(index_name: str):
     """OpenSearch vektor bazası bağlantısını verir (həm istifadəçi, həm də standartlar üçün istifadə edilə bilər)."""
+    
+    # 1. Düzgün Environment Variable-ları funksiya daxilində oxuyuruq
+    HOST_V = os.getenv("OPENSEARCH_HOSTS")
+    PORT_STR_V = os.getenv("OPENSEARCH_PORT")
+    USER_V = os.getenv("OPENSEARCH_USER")
+    PASSWORD_V = os.getenv("OPENSEARCH_PASSWORD")
+    
+    # 2. Bütün dəyərlər mövcud olub-olmadığını yoxlayırıq
+    if not (HOST_V and PORT_STR_V and PORT_STR_V.isdigit() and USER_V and PASSWORD_V):
+        print("WARNING: OpenSearch Env Variables incomplete for Vector Search. Check App Platform settings.")
+        return None
+
     try:
         embeddings = create_embeddings_client(GEMINI_API_KEY)
-
-        host = "localhost" if OS_HOST in ["opensearch", "db"] else OS_HOST
+        PORT_V = int(PORT_STR_V)
+        
+        # 3. Düzgün OpenSearch URL-i yaradırıq
+        opensearch_url = f"https://{HOST_V}:{PORT_V}"
 
         return OpenSearchVectorSearch(
             index_name=index_name,
             embedding_function=embeddings,
-            opensearch_url=f"https://{host}:{OS_PORT}",
-            http_auth=(OS_USER, OS_PASS),
+            opensearch_url=opensearch_url,
+            http_auth=(USER_V, PASSWORD_V), # YENİ, DÜZGÜN DƏYİŞƏNLƏR İSTİFADƏ OLUNUR
             use_ssl=True,
             verify_certs=False,
             ssl_assert_hostname=False,
@@ -348,7 +347,6 @@ def search_standards_base(query: str) -> List[str]:
         k=4  # Standartlardan da 4 relevant chunk çıxarırıq
     )
 
-    # Standartın adını da cavaba daxil etmək faydalı olar (opsional)
     context_list = []
     for d in docs:
         standard_name = d.metadata.get("standard_name", "Naməlum Standart")
