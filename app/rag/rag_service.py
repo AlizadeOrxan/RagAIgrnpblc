@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from fastapi import UploadFile
 from tempfile import NamedTemporaryFile
 from typing import List
+from opensearchpy import OpenSearch
 
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_community.document_loaders import PyPDFLoader
@@ -13,10 +14,26 @@ load_dotenv()
 
 # ---- Konfiqurasiya ----
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-OS_HOST = os.getenv("OS_HOST", "localhost")
-OS_PORT = int(os.getenv("OS_PORT", 9200))
-OS_USER = os.getenv("OS_USER", "admin")
-OS_PASS = os.getenv("OS_PASS", "StrongP@ss123")
+# OS_HOST = os.getenv("OS_HOST", "localhost")
+# OS_PORT = int(os.getenv("OS_PORT", 9200))
+# OS_USER = os.getenv("OS_USER", "admin")
+# OS_PASS = os.getenv("OS_PASS", "StrongP@ss123")
+
+HOST = os.getenv("OPENSEARCH_HOSTS")
+PORT = int(os.getenv("OPENSEARCH_PORT"))
+USER = os.getenv("OPENSEARCH_USER")
+PASSWORD = os.getenv("OPENSEARCH_PASSWORD")
+
+# 2. OpenSearch klientini yaratmaq (Ayrı-ayrı dəyərlərlə)
+client = OpenSearch(
+    hosts=[{'host': HOST, 'port': PORT}],
+    http_auth=(USER, PASSWORD),
+    use_ssl=True,
+    # verify_certs-i False etmək bəzən App Platformda SSL xətalarını aradan qaldırır.
+    verify_certs=False,
+    ssl_assert_hostname=False,
+    ssl_show_warn=False
+)
 
 # İki fərqli indeksin adı
 INDEX_NAME = "rag_knowledge_base"  # İstifadəçi faylları
