@@ -10,3 +10,6 @@ pypdf
 tqdm
 langchain-community
 python-multipart
+unstructured
+openpyxl
+python-magic
