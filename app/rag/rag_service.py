@@ -284,7 +284,7 @@ from fastapi import UploadFile
 from tempfile import NamedTemporaryFile
 from typing import List
 from opensearchpy import OpenSearch
-import shutil  # Fayl kopyalama əməliyyatı üçün əlavə edildi
+import shutil  # Fayl kopyalama
 
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_community.document_loaders import PyPDFLoader
