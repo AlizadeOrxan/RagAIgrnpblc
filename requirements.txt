@@ -13,3 +13,4 @@ python-multipart
 unstructured
 openpyxl
 python-magic
+gunicorn
