@@ -336,6 +336,44 @@ def create_llm_client(api_key: str):
 
 ## OpenSearch Klientləri və Pipeline Məntiqi
 
+# def get_opensearch_client(index_name: str):
+#     """OpenSearch vektor bazası bağlantısını verir."""
+#
+#     # Düzgün Environment Variable-ları funksiya daxilində oxuyuruq
+#     HOST_V = os.getenv("OPENSEARCH_HOSTS")
+#     PORT_STR_V = os.getenv("OPENSEARCH_PORT")
+#     USER_V = os.getenv("OPENSEARCH_USER")
+#     PASSWORD_V = os.getenv("OPENSEARCH_PASSWORD")
+#
+#     # Bütün dəyərlər mövcud olub-olmadığını yoxlayırıq
+#     if not (HOST_V and PORT_STR_V and PORT_STR_V.isdigit() and USER_V and PASSWORD_V):
+#         print("WARNING: OpenSearch Env Variables incomplete for Vector Search. Check App Platform settings.")
+#         return None
+#
+#     try:
+#         embeddings = create_embeddings_client(GEMINI_API_KEY)
+#         PORT_V = int(PORT_STR_V)
+#         opensearch_url = f"https://{HOST_V}:{PORT_V}"
+#
+#         index_args = {}
+#         if index_name == STANDARDS_INDEX_NAME:
+#             index_args = {"pipeline": "pdf_date_fixer"}
+#
+#         return OpenSearchVectorSearch(
+#             index_name=index_name,
+#             embedding_function=embeddings,
+#             opensearch_url=opensearch_url,
+#             http_auth=(USER_V, PASSWORD_V),
+#             use_ssl=True,
+#             verify_certs=False,
+#             ssl_assert_hostname=False,
+#             ssl_show_warn=False,
+#             index_kwargs=index_args
+#         )
+#     except Exception as e:
+#         print(f"OpenSearch bağlantı xətası ({index_name}): {e}")
+#         return None .
+
 def get_opensearch_client(index_name: str):
     """OpenSearch vektor bazası bağlantısını verir."""
 
@@ -355,6 +393,14 @@ def get_opensearch_client(index_name: str):
         PORT_V = int(PORT_STR_V)
         opensearch_url = f"https://{HOST_V}:{PORT_V}"
 
+        # OpenSearch Klient parametrləri
+        client_kwargs = {
+            # Əsas dəyişiklik: Bağlantı və oxuma timeout-unu 30 saniyəyə qaldırırıq
+            "timeout": 30,
+            "max_retries": 3,
+            "retry_on_timeout": True,
+        }
+
         index_args = {}
         if index_name == STANDARDS_INDEX_NAME:
             index_args = {"pipeline": "pdf_date_fixer"}
@@ -368,9 +414,12 @@ def get_opensearch_client(index_name: str):
             verify_certs=False,
             ssl_assert_hostname=False,
             ssl_show_warn=False,
-            index_kwargs=index_args
+            index_kwargs=index_args,
+            # Yeni Klient parametrlərini əlavə edirik
+            client_kwargs=client_kwargs
         )
     except Exception as e:
+        # Xəta haqqında daha çox məlumat çap etmək üçün try/except-i saxlayırıq
         print(f"OpenSearch bağlantı xətası ({index_name}): {e}")
         return None
 
