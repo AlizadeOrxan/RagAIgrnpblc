@@ -458,29 +458,61 @@ async def chat_with_rag(request: ChatRequest):
         chat_history = format_history_for_prompt(history_manager, limit=3)
 
         # --- MARKDOWN-u QARŞISINI ALAN ƏMR ---
-        MARKDOWN_SUPPRESSION = "Cavabı formatlamadan, yalnız təmiz mətn və ya (cədvəl tələb olunursa) təmiz mətn cədvəli kimi təqdim et. Markdown formatından (** bold, * list) qaç."
+        # MARKDOWN_SUPPRESSION = "Cavabı formatlamadan, yalnız təmiz mətn və ya (cədvəl tələb olunursa) təmiz mətn cədvəli kimi təqdim et. Markdown formatından (** bold, * list) qaç."
+        #
+        # # 3. İXTİSASLAŞMIŞ PROMPTLARIN SEÇİLMƏSİ
+        #
+        # if "çatışmazlıq" in request.message.lower() or "tapılmadı" in request.message.lower() or "gap" in request.message.lower():
+        #     # Tələb: Specialized Prompt - Gap Detection
+        #     system_prompt = (
+        #                         "Sən yüksək səviyyəli ESG Auditörsən. Sənin əsas tapşırığın **Standartlar (Kontekst 2)** tərəfindən tələb olunan hər bir elementi **Şirkət Məlumatı (Kontekst 1)** ilə müqayisə etməkdir. "
+        #                         "Cavabında, Kontekst 2-də tələb olunan, lakin Kontekst 1-də **tapılmayan (çatışmayan)** məlumat nöqtələrinin **dəqiq siyahısını** ver. Nəticəni bir **Markdown Cədvəli** formatında təqdim et."
+        #                     ) + MARKDOWN_SUPPRESSION
+        #
+        # elif "dəqiqliyi" in request.message.lower() or "formatı" in request.message.lower() or "rəqəmsal" in request.message.lower() or "quote" in request.message.lower():
+        #     # Tələb: Specialized Prompt - Line-by-Line Analysis
+        #     system_prompt = (
+        #                         "Sən SASB/ISSB standartları üzrə Dəqiqlik Analitiksən. Sənin vəzifən istifadəçinin sualı əsasında Kontekst 1-dən **dəqiq sətiri çıxarmaq** (Quote the exact line) və Kontekst 2-də tələb olunan **spesifik numerik (rəqəmsal) və ya formatlama** tələblərinə uyğun olub-olmadığını yoxlamaqdır. "
+        #                         "Cavabını bir **Markdown Cədvəlində**, təhlil etdiyin **dəqiq sətiri qeyd edərək** təqdim et. Cədvəl [Tələb Olunan Standart], [Şirkət Mətnindən Dəqiq Sitat], [Uyğunluq Statusu] sütunlarından ibarət olsun."
+        #                     ) + MARKDOWN_SUPPRESSION
+        #
+        # else:
+        #     # Ümumi Müqayisə Promptu
+        #     system_prompt = (
+        #                         "Sən Keyfiyyət Təminatı üzrə Ekspert Auditörsən. Sənin məqsədin verilmiş kontekstləri müqayisə etməkdir. Keçmiş məlumatları nəzərə alaraq, Azərbaycan dilində ətraflı cavab ver."
+        #                     ) + MARKDOWN_SUPPRESSION
+
+        # YENİ MARKDOWN NƏZARƏTİ
+        # Bu, yalnız ümumi, formatlanmamış mətn tələb edildikdə istifadə olunacaq.
+        MARKDOWN_CLEAN = "Cavabı tamamilə formatlamadan, yalnız təmiz mətn kimi təqdim et. Markdown formatından (**, *, #) qaç."
 
         # 3. İXTİSASLAŞMIŞ PROMPTLARIN SEÇİLMƏSİ
 
         if "çatışmazlıq" in request.message.lower() or "tapılmadı" in request.message.lower() or "gap" in request.message.lower():
             # Tələb: Specialized Prompt - Gap Detection
             system_prompt = (
-                                "Sən yüksək səviyyəli ESG Auditörsən. Sənin əsas tapşırığın **Standartlar (Kontekst 2)** tərəfindən tələb olunan hər bir elementi **Şirkət Məlumatı (Kontekst 1)** ilə müqayisə etməkdir. "
-                                "Cavabında, Kontekst 2-də tələb olunan, lakin Kontekst 1-də **tapılmayan (çatışmayan)** məlumat nöqtələrinin **dəqiq siyahısını** ver. Nəticəni bir **Markdown Cədvəli** formatında təqdim et."
-                            ) + MARKDOWN_SUPPRESSION
+                "Sən yüksək səviyyəli ESG Auditörsən. Sənin əsas tapşırığın **Standartlar (Kontekst 2)** tərəfindən tələb olunan hər bir elementi **Şirkət Məlumatı (Kontekst 1)** ilə müqayisə etməkdir. "
+                "Cavabında, Kontekst 2-də tələb olunan, lakin Kontekst 1-də **tapılmayan (çatışmayan)** məlumat nöqtələrinin **dəqiq siyahısını** ver. "
+                "Nəticəni bir **Markdown Cədvəli** formatında təqdim et. **Cədvəl yaratmaq üçün lazım olan bütün Markdown sintaksisindən istifadə etməyə icazə verilir.**"
+            # <<< DƏYİŞİKLİK
+            )
 
         elif "dəqiqliyi" in request.message.lower() or "formatı" in request.message.lower() or "rəqəmsal" in request.message.lower() or "quote" in request.message.lower():
             # Tələb: Specialized Prompt - Line-by-Line Analysis
             system_prompt = (
-                                "Sən SASB/ISSB standartları üzrə Dəqiqlik Analitiksən. Sənin vəzifən istifadəçinin sualı əsasında Kontekst 1-dən **dəqiq sətiri çıxarmaq** (Quote the exact line) və Kontekst 2-də tələb olunan **spesifik numerik (rəqəmsal) və ya formatlama** tələblərinə uyğun olub-olmadığını yoxlamaqdır. "
-                                "Cavabını bir **Markdown Cədvəlində**, təhlil etdiyin **dəqiq sətiri qeyd edərək** təqdim et. Cədvəl [Tələb Olunan Standart], [Şirkət Mətnindən Dəqiq Sitat], [Uyğunluq Statusu] sütunlarından ibarət olsun."
-                            ) + MARKDOWN_SUPPRESSION
+                "Sən SASB/ISSB standartları üzrə Dəqiqlik Analitiksən... "
+                "Cavabını bir **Markdown Cədvəlində**, təhlil etdiyin **dəqiq sətiri qeyd edərək** təqdim et. Cədvəl [Tələb Olunan Standart], [Şirkət Mətnindən Dəqiq Sitat], [Uyğunluq Statusu] sütunlarından ibarət olsun. "
+                "**Cədvəl yaratmaq üçün lazım olan bütün Markdown sintaksisindən istifadə etməyə icazə verilir.**"
+            # <<< DƏYİŞİKLİK
+            )
 
         else:
             # Ümumi Müqayisə Promptu
             system_prompt = (
                                 "Sən Keyfiyyət Təminatı üzrə Ekspert Auditörsən. Sənin məqsədin verilmiş kontekstləri müqayisə etməkdir. Keçmiş məlumatları nəzərə alaraq, Azərbaycan dilində ətraflı cavab ver."
-                            ) + MARKDOWN_SUPPRESSION
+                            ) + MARKDOWN_CLEAN  # <<< YALNIZ BURADA TƏMİZ MƏTİN TƏLƏB EDİLİR
+
+
 
         # 4. Promptun Hazırlanması
         user_prompt = (

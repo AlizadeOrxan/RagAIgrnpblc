@@ -482,6 +482,61 @@ def index_standards_from_directory(directory_path: str):
 
 # --- FAYL EMALI VƏ İNDEKSLƏNMƏ (EXCEL DƏSTƏYİ ƏLAVƏ OLUNDU) ---
 
+# def process_and_index_file(uploaded_file: UploadFile, session_id: str) -> bool:
+#     """PDF/EXCEL sənədini emal edib İSTİFADƏÇİ bazasına indeksləyir"""
+#     temp_path = None
+#     try:
+#         vector_store = get_opensearch_client(INDEX_NAME)
+#         if not vector_store:
+#             return False
+#
+#         # Faylı temp qovluğuna yazırıq
+#         temp_filepath = f"/tmp/{uploaded_file.filename}"
+#         with open(temp_filepath, "wb") as f:
+#             # Faylın məzmununu temp fayla kopyalayırıq
+#             shutil.copyfileobj(uploaded_file.file, f)
+#             temp_path = temp_filepath
+#
+#         file_extension = os.path.splitext(uploaded_file.filename)[1].lower()
+#
+#         # --- LOADER SEÇİMİ ---
+#         if file_extension == '.pdf':
+#             print("INFO: Loading file with PyMuPDFLoader...")
+#             loader = PyPDFLoader(temp_path)
+#         elif file_extension in ['.xlsx', '.xls']:  # <<< EXCEL DƏSTƏYİ
+#             print("INFO: Loading file with UnstructuredExcelLoader...")
+#             # 'mode="elements"' daha strukturlaşdırılmış məlumat çıxarmağa kömək edir
+#             loader = UnstructuredExcelLoader(temp_path) #mode="elements")
+#         else:
+#             # main.py-da bu fayl tipi artıq yoxlanıldığı üçün burda xəta vermirik
+#             print(f"ERROR: process_and_index_file received unsupported file type: {file_extension}")
+#             return False
+#
+#             # Faylı yükləyirik
+#         docs = loader.load()
+#
+#         splitter = RecursiveCharacterTextSplitter(
+#             chunk_size=2000,
+#             chunk_overlap=200
+#         )
+#         chunks = splitter.split_documents(docs)
+#
+#         for doc in chunks:
+#             doc.metadata["session_id"] = session_id
+#             doc.metadata["source_file"] = uploaded_file.filename
+#
+#         vector_store.add_documents(chunks)
+#         return True
+#
+#     except Exception as e:
+#         print("Fayl emalı xətası:", e)
+#         return False
+#
+#     finally:
+#         if temp_path and os.path.exists(temp_path):
+#             os.remove(temp_path)
+
+
 def process_and_index_file(uploaded_file: UploadFile, session_id: str) -> bool:
     """PDF/EXCEL sənədini emal edib İSTİFADƏÇİ bazasına indeksləyir"""
     temp_path = None
@@ -505,27 +560,40 @@ def process_and_index_file(uploaded_file: UploadFile, session_id: str) -> bool:
             loader = PyPDFLoader(temp_path)
         elif file_extension in ['.xlsx', '.xls']:  # <<< EXCEL DƏSTƏYİ
             print("INFO: Loading file with UnstructuredExcelLoader...")
-            # 'mode="elements"' daha strukturlaşdırılmış məlumat çıxarmağa kömək edir
-            loader = UnstructuredExcelLoader(temp_path, mode="elements")
+            # Problem 1 (Format Xətası) ehtimalını azaltmaq üçün 'mode="elements"' çıxarılır
+            loader = UnstructuredExcelLoader(temp_path)
         else:
-            # main.py-da bu fayl tipi artıq yoxlanıldığı üçün burda xəta vermirik
             print(f"ERROR: process_and_index_file received unsupported file type: {file_extension}")
             return False
 
-            # Faylı yükləyirik
+        # 1. Faylı yükləyirik
         docs = loader.load()
 
+        # 2. <<< Problem 2 Həlli: Məzmunun Təmizlənməsi (Sanitizasiya) >>>
+        for doc in docs:
+            if doc.page_content:
+                # Ulduzları ('*') boşluqla əvəz edirik (Markdown formatını aradan qaldırır)
+                doc.page_content = doc.page_content.replace('*', ' ')
+                # Birdən çox olan boşluqları tək boşluğa çeviririk (əlavə təmizlik)
+                doc.page_content = ' '.join(doc.page_content.split())
+        # -------------------------------------------------------------
+
+        # 3. Məzmunu parçalara ayırırıq
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=2000,
             chunk_overlap=200
         )
         chunks = splitter.split_documents(docs)
 
+        # 4. Metadata əlavə edirik
         for doc in chunks:
-            doc.metadata["session_id"] = session_id
+            doc.metadata["session_id"] = session_id  # Problem 3 üçün əsas
             doc.metadata["source_file"] = uploaded_file.filename
 
+        # 5. OpenSearch-ə indeksləyirik
         vector_store.add_documents(chunks)
+
+        print(f"SUCCESS: {len(chunks)} parça {session_id} sessiyası üçün indeksləndi.")
         return True
 
     except Exception as e:
