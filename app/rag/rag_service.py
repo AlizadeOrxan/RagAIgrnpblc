@@ -374,6 +374,72 @@ def create_llm_client(api_key: str):
 #         print(f"OpenSearch bağlantı xətası ({index_name}): {e}")
 #         return None .
 
+# def get_opensearch_client(index_name: str):
+#     """OpenSearch vektor bazası bağlantısını verir."""
+#
+#     # Düzgün Environment Variable-ları funksiya daxilində oxuyuruq
+#     HOST_V = os.getenv("OPENSEARCH_HOSTS")
+#     PORT_STR_V = os.getenv("OPENSEARCH_PORT")
+#     USER_V = os.getenv("OPENSEARCH_USER")
+#     PASSWORD_V = os.getenv("OPENSEARCH_PASSWORD")
+#
+#     # Bütün dəyərlər mövcud olub-olmadığını yoxlayırıq
+#     if not (HOST_V and PORT_STR_V and PORT_STR_V.isdigit() and USER_V and PASSWORD_V):
+#         print("WARNING: OpenSearch Env Variables incomplete for Vector Search. Check App Platform settings.")
+#         return None
+#
+#     try:
+#         embeddings = create_embeddings_client(GEMINI_API_KEY)
+#         PORT_V = int(PORT_STR_V)
+#         opensearch_url = f"https://{HOST_V}:{PORT_V}"
+#
+#         # OpenSearch Klient parametrləri
+#         client_kwargs = {
+#             # Bağlantı timeout-unu 30 saniyəyə qaldırırıq
+#             "timeout": 30,
+#             "max_retries": 3,
+#             "retry_on_timeout": True,
+#         }
+#
+#         # ƏLAVƏ DİAQNOSTİKA: Əsas OpenSearch klientini yaradıb Ping edirik.
+#         # Bu, xətanın OpenSearch qoşulmasında yoxsa Langchain obyektində olduğunu göstərəcək.
+#         raw_client = OpenSearch(
+#             hosts=[{'host': HOST_V, 'port': PORT_V}],
+#             http_auth=(USER_V, PASSWORD_V),
+#             use_ssl=True,
+#             verify_certs=False,
+#             ssl_assert_hostname=False,
+#             ssl_show_warn=False,
+#             **client_kwargs
+#         )
+#
+#         # Klientin qoşulub-qoşulmadığını yoxlamaq üçün ping atırıq
+#         if not raw_client.ping():
+#             # Əgər ping uğursuz olarsa, dərhal xəta atırıq
+#             raise ConnectionError(f"OpenSearch hostu {HOST_V}:{PORT_V} əlçatmazdır (Ping uğursuz).")
+#
+#         index_args = {}
+#         if index_name == STANDARDS_INDEX_NAME:
+#             index_args = {"pipeline": "pdf_date_fixer"}
+#
+#         return OpenSearchVectorSearch(
+#             index_name=index_name,
+#             embedding_function=embeddings,
+#             opensearch_url=opensearch_url,
+#             http_auth=(USER_V, PASSWORD_V),
+#             use_ssl=True,
+#             verify_certs=False,
+#             ssl_assert_hostname=False,
+#             ssl_show_warn=False,
+#             index_kwargs=index_args,
+#             client_kwargs=client_kwargs
+#         )
+#     except Exception as e:
+#         # Bu, həm ConnectionError, həm də digər xətaları tutacaq
+#         print(f"OpenSearch bağlantı xətası ({index_name}): {e}")
+#         return None evvel olan 128 xeta alinir
+
+
 def get_opensearch_client(index_name: str):
     """OpenSearch vektor bazası bağlantısını verir."""
 
@@ -389,7 +455,9 @@ def get_opensearch_client(index_name: str):
         return None
 
     try:
+        # 1. Embeddings Klientini Yaradırıq
         embeddings = create_embeddings_client(GEMINI_API_KEY)
+
         PORT_V = int(PORT_STR_V)
         opensearch_url = f"https://{HOST_V}:{PORT_V}"
 
@@ -401,8 +469,9 @@ def get_opensearch_client(index_name: str):
             "retry_on_timeout": True,
         }
 
-        # ƏLAVƏ DİAQNOSTİKA: Əsas OpenSearch klientini yaradıb Ping edirik.
-        # Bu, xətanın OpenSearch qoşulmasında yoxsa Langchain obyektində olduğunu göstərəcək.
+        # 2. OpenSearch Klientini Yaradıb Bağlantını Yoxlayırıq (Ping)
+        # Ping uğursuz olsa belə, bu, Langchain obyektini yaratmağa mane olmamalıdır.
+        # Əgər Ping bu qısa müddətdə dərhal xəta verirsə, bu Kod 128-in səbəbidir.
         raw_client = OpenSearch(
             hosts=[{'host': HOST_V, 'port': PORT_V}],
             http_auth=(USER_V, PASSWORD_V),
@@ -413,10 +482,15 @@ def get_opensearch_client(index_name: str):
             **client_kwargs
         )
 
-        # Klientin qoşulub-qoşulmadığını yoxlamaq üçün ping atırıq
-        if not raw_client.ping():
-            # Əgər ping uğursuz olarsa, dərhal xəta atırıq
-            raise ConnectionError(f"OpenSearch hostu {HOST_V}:{PORT_V} əlçatmazdır (Ping uğursuz).")
+        # XƏTA MƏNBƏYİ: Ping atılması hələ də prosesi dayandırır.
+        # Təhlükəsizlik üçün: Ping-i try/except ilə bükürük, amma əsas obyekti qaytarırıq.
+        try:
+            # Ping cəhdi - Loglarda xəta görmək üçün
+            if not raw_client.ping():
+                print(f"ERROR: OpenSearch hostu {HOST_V}:{PORT_V} əlçatmazdır (Ping uğursuz).")
+        except Exception as ping_e:
+            # Əgər Ping zamanı birbaşa Connection Refused gəlirsə, onu çap edirik.
+            print(f"ERROR: OpenSearch Ping zamanı kritik xəta: {ping_e}")
 
         index_args = {}
         if index_name == STANDARDS_INDEX_NAME:
@@ -435,8 +509,8 @@ def get_opensearch_client(index_name: str):
             client_kwargs=client_kwargs
         )
     except Exception as e:
-        # Bu, həm ConnectionError, həm də digər xətaları tutacaq
-        print(f"OpenSearch bağlantı xətası ({index_name}): {e}")
+        # Bütün xətaları (OpenSearch və ya Embeddings Client) burada tuturuq.
+        print(f"KRİTİK BAĞLANTI XƏTASI ({index_name}): {e}. Tətbiq dayana bilər.")
         return None
 
 
