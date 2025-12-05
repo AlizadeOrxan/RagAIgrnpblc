@@ -395,11 +395,28 @@ def get_opensearch_client(index_name: str):
 
         # OpenSearch Klient parametrləri
         client_kwargs = {
-            # Əsas dəyişiklik: Bağlantı və oxuma timeout-unu 30 saniyəyə qaldırırıq
+            # Bağlantı timeout-unu 30 saniyəyə qaldırırıq
             "timeout": 30,
             "max_retries": 3,
             "retry_on_timeout": True,
         }
+
+        # ƏLAVƏ DİAQNOSTİKA: Əsas OpenSearch klientini yaradıb Ping edirik.
+        # Bu, xətanın OpenSearch qoşulmasında yoxsa Langchain obyektində olduğunu göstərəcək.
+        raw_client = OpenSearch(
+            hosts=[{'host': HOST_V, 'port': PORT_V}],
+            http_auth=(USER_V, PASSWORD_V),
+            use_ssl=True,
+            verify_certs=False,
+            ssl_assert_hostname=False,
+            ssl_show_warn=False,
+            **client_kwargs
+        )
+
+        # Klientin qoşulub-qoşulmadığını yoxlamaq üçün ping atırıq
+        if not raw_client.ping():
+            # Əgər ping uğursuz olarsa, dərhal xəta atırıq
+            raise ConnectionError(f"OpenSearch hostu {HOST_V}:{PORT_V} əlçatmazdır (Ping uğursuz).")
 
         index_args = {}
         if index_name == STANDARDS_INDEX_NAME:
@@ -415,11 +432,10 @@ def get_opensearch_client(index_name: str):
             ssl_assert_hostname=False,
             ssl_show_warn=False,
             index_kwargs=index_args,
-            # Yeni Klient parametrlərini əlavə edirik
             client_kwargs=client_kwargs
         )
     except Exception as e:
-        # Xəta haqqında daha çox məlumat çap etmək üçün try/except-i saxlayırıq
+        # Bu, həm ConnectionError, həm də digər xətaları tutacaq
         print(f"OpenSearch bağlantı xətası ({index_name}): {e}")
         return None
 
