@@ -483,7 +483,6 @@ async def chat_with_rag(request: ChatRequest):
         #                     ) + MARKDOWN_SUPPRESSION
 
         # YENİ MARKDOWN NƏZARƏTİ
-        # Bu, yalnız ümumi, formatlanmamış mətn tələb edildikdə istifadə olunacaq.
         MARKDOWN_CLEAN = "Cavabı tamamilə formatlamadan, yalnız təmiz mətn kimi təqdim et. Markdown formatından (**, *, #) qaç."
 
         # 3. İXTİSASLAŞMIŞ PROMPTLARIN SEÇİLMƏSİ

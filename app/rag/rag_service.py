@@ -585,7 +585,7 @@ def process_and_index_file(uploaded_file: UploadFile, session_id: str) -> bool:
         )
         chunks = splitter.split_documents(docs)
 
-        # 4. Metadata əlavə edirik
+        # 4. Metadata əlavə edirk
         for doc in chunks:
             doc.metadata["session_id"] = session_id  # Problem 3 üçün əsas
             doc.metadata["source_file"] = uploaded_file.filename
