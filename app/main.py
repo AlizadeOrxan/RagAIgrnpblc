@@ -240,6 +240,7 @@
 #             detail=f"RAG prosesi zamanı daxili xəta: {e}"
 #         )
 import os
+import logging
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from urllib.parse import quote_plus
 from langchain_community.chat_message_histories import SQLChatMessageHistory
@@ -431,7 +432,150 @@ async def reset_chat_history(request: ChatRequest):
         )
 
 
-# --- Chat Endpointi (MARKDOWN-u ƏLAVƏ OLUNDU) ---
+# # --- Chat Endpointi (MARKDOWN-u ƏLAVƏ OLUNDU) ---
+# @app.post("/chat", response_model=ChatResponse)
+# async def chat_with_rag(request: ChatRequest):
+#     """
+#     Multi-Source RAG, Çat Keçmişi və İxtisaslaşmış Audit Promtları ilə cavab verir.
+#     """
+#     try:
+#         # 1. RETRIEVER LOGIC: Hər iki bazadan konteksti çıxar
+#         user_context_list = search_knowledge_base(request.message, request.session_id)
+#         standards_context_list = search_standards_base(request.message)
+#
+#         if not user_context_list and not standards_context_list:
+#             ai_response = f"Sessiya '{request.session_id}' üçün OpenSearch-də relevant kontekst tapılmadı."
+#             return ChatResponse(session_id=request.session_id, ai_response=ai_response)
+#
+#         user_context = "\n---\n".join(
+#             user_context_list) if user_context_list else "İstifadəçi sənədində relevant məlumat tapılmadı."
+#         standards_context = "\n---\n".join(
+#             standards_context_list) if standards_context_list else "Standartlar bazasında relevant məlumat tapılmadı."
+#
+#         # 2. SESSION MANAGEMENT: History Manager yaradılır
+#         history_manager = get_history_manager(request.session_id)
+#
+#         # Keçmişi formatlayıb prompta əlavə etmək üçün oxuyur
+#         chat_history = format_history_for_prompt(history_manager, limit=3)
+#
+#         # --- MARKDOWN-u QARŞISINI ALAN ƏMR ---
+#         # MARKDOWN_SUPPRESSION = "Cavabı formatlamadan, yalnız təmiz mətn və ya (cədvəl tələb olunursa) təmiz mətn cədvəli kimi təqdim et. Markdown formatından (** bold, * list) qaç."
+#         #
+#         # # 3. İXTİSASLAŞMIŞ PROMPTLARIN SEÇİLMƏSİ
+#         #
+#         # if "çatışmazlıq" in request.message.lower() or "tapılmadı" in request.message.lower() or "gap" in request.message.lower():
+#         #     # Tələb: Specialized Prompt - Gap Detection
+#         #     system_prompt = (
+#         #                         "Sən yüksək səviyyəli ESG Auditörsən. Sənin əsas tapşırığın **Standartlar (Kontekst 2)** tərəfindən tələb olunan hər bir elementi **Şirkət Məlumatı (Kontekst 1)** ilə müqayisə etməkdir. "
+#         #                         "Cavabında, Kontekst 2-də tələb olunan, lakin Kontekst 1-də **tapılmayan (çatışmayan)** məlumat nöqtələrinin **dəqiq siyahısını** ver. Nəticəni bir **Markdown Cədvəli** formatında təqdim et."
+#         #                     ) + MARKDOWN_SUPPRESSION
+#         #
+#         # elif "dəqiqliyi" in request.message.lower() or "formatı" in request.message.lower() or "rəqəmsal" in request.message.lower() or "quote" in request.message.lower():
+#         #     # Tələb: Specialized Prompt - Line-by-Line Analysis
+#         #     system_prompt = (
+#         #                         "Sən SASB/ISSB standartları üzrə Dəqiqlik Analitiksən. Sənin vəzifən istifadəçinin sualı əsasında Kontekst 1-dən **dəqiq sətiri çıxarmaq** (Quote the exact line) və Kontekst 2-də tələb olunan **spesifik numerik (rəqəmsal) və ya formatlama** tələblərinə uyğun olub-olmadığını yoxlamaqdır. "
+#         #                         "Cavabını bir **Markdown Cədvəlində**, təhlil etdiyin **dəqiq sətiri qeyd edərək** təqdim et. Cədvəl [Tələb Olunan Standart], [Şirkət Mətnindən Dəqiq Sitat], [Uyğunluq Statusu] sütunlarından ibarət olsun."
+#         #                     ) + MARKDOWN_SUPPRESSION
+#         #
+#         # else:
+#         #     # Ümumi Müqayisə Promptu
+#         #     system_prompt = (
+#         #                         "Sən Keyfiyyət Təminatı üzrə Ekspert Auditörsən. Sənin məqsədin verilmiş kontekstləri müqayisə etməkdir. Keçmiş məlumatları nəzərə alaraq, Azərbaycan dilində ətraflı cavab ver."
+#         #                     ) + MARKDOWN_SUPPRESSION
+#
+#         # YENİ MARKDOWN NƏZARƏTİ
+#         MARKDOWN_CLEAN = "Cavabı tamamilə formatlamadan, yalnız təmiz mətn kimi təqdim et. Markdown formatından (**, *, #) qaç."
+#
+#         # 3. İXTİSASLAŞMIŞ PROMPTLARIN SEÇİLMƏSİ
+#
+#         if "çatışmazlıq" in request.message.lower() or "tapılmadı" in request.message.lower() or "gap" in request.message.lower():
+#             # Tələb: Specialized Prompt - Gap Detection
+#             system_prompt = (
+#                 "Sən yüksək səviyyəli ESG Auditörsən. Sənin əsas tapşırığın **Standartlar (Kontekst 2)** tərəfindən tələb olunan hər bir elementi **Şirkət Məlumatı (Kontekst 1)** ilə müqayisə etməkdir. "
+#                 "Cavabında, Kontekst 2-də tələb olunan, lakin Kontekst 1-də **tapılmayan (çatışmayan)** məlumat nöqtələrinin **dəqiq siyahısını** ver. "
+#                 "Nəticəni bir **Markdown Cədvəli** formatında təqdim et. **Cədvəl yaratmaq üçün lazım olan bütün Markdown sintaksisindən istifadə etməyə icazə verilir.**"
+#             # <<< DƏYİŞİKLİK
+#             )
+#
+#         elif "dəqiqliyi" in request.message.lower() or "formatı" in request.message.lower() or "rəqəmsal" in request.message.lower() or "quote" in request.message.lower():
+#             # Tələb: Specialized Prompt - Line-by-Line Analysis
+#             system_prompt = (
+#                 "Sən SASB/ISSB standartları üzrə Dəqiqlik Analitiksən... "
+#                 "Cavabını bir **Markdown Cədvəlində**, təhlil etdiyin **dəqiq sətiri qeyd edərək** təqdim et. Cədvəl [Tələb Olunan Standart], [Şirkət Mətnindən Dəqiq Sitat], [Uyğunluq Statusu] sütunlarından ibarət olsun. "
+#                 "**Cədvəl yaratmaq üçün lazım olan bütün Markdown sintaksisindən istifadə etməyə icazə verilir.**"
+#             # <<< DƏYİŞİKLİK
+#             )
+#
+#         else:
+#             # Ümumi Müqayisə Promptu
+#             system_prompt = (
+#                                 "Sən Keyfiyyət Təminatı üzrə Ekspert Auditörsən. Sənin məqsədin verilmiş kontekstləri müqayisə etməkdir. Keçmiş məlumatları nəzərə alaraq, Azərbaycan dilində ətraflı cavab ver."
+#                             ) + MARKDOWN_CLEAN  # <<< YALNIZ BURADA TƏMİZ MƏTİN TƏLƏB EDİLİR
+#
+#
+#
+#         # 4. Promptun Hazırlanması
+#         user_prompt = (
+#                 chat_history +
+#                 f"Cari Sual: {request.message}\n\n"
+#                 f"KONTEKST 1 (Şirkət Məlumatı / İstifadəçi Faylı):\n{user_context}\n\n"
+#                 f"KONTEKST 2 (Standartlar Bazası / ESG Standartları):\n{standards_context}\n\n"
+#         )
+#
+#         # 5. Modelə Göndərmə və Cavab Alma
+#         llm = create_llm_client(os.getenv("GEMINI_API_KEY"))
+#         response = llm.invoke(input=user_prompt, system=system_prompt)
+#         final_response = response.content
+#
+#         # 6. SESSION MANAGEMENT: Çat Keçmişini PostgreSQL-ə yaziriq
+#         history_manager.add_user_message(request.message)
+#         history_manager.add_ai_message(final_response)
+#
+#         return ChatResponse(
+#             session_id=request.session_id,
+#             ai_response=final_response
+#         )
+#
+#     except Exception as e:
+#         raise HTTPException(
+#             status_code=500,
+#             detail=f"RAG prosesi zamanı daxili xəta: {e}"
+#         ) bu daha sonra silinecek eger ki bir problem olmarsa
+
+
+logger = logging.getLogger(__name__)
+
+
+# Fərz edilən Pydantic Modelləri
+class ChatRequest(BaseModel):
+    message: str
+    session_id: str
+
+
+class ChatResponse(BaseModel):
+    session_id: str
+    ai_response: str
+
+
+def clean_llm_response(raw_content: str) -> str:
+    """
+    LLM cavabından artıq qalan Markdown listə və bold simvollarını təmizləyir.
+    Bu, əsasən təmiz mətn tələb olunan hallarda tətbiq edilir.
+    """
+
+    # 1. Bütün ulduzları boşluqla əvəz edirik (Markdown simvolları * və **).
+    cleaned = raw_content.replace('*', ' ')
+
+    # 2. Üçqat (***) və ya tək (*) ulduzların yaratdığı artıq boşluqları tək boşluğa çeviririk.
+    cleaned = ' '.join(cleaned.split())
+
+    # 3. Ardıcıl iki nöqtəni (..) ləğv edirik (bəzən LLM cavablarında olur).
+    cleaned = cleaned.replace('..', '.')
+
+    return cleaned
+
+
+# Fərz edilir ki, @app.post('/chat') burada yerləşir
 @app.post("/chat", response_model=ChatResponse)
 async def chat_with_rag(request: ChatRequest):
     """
@@ -457,61 +601,35 @@ async def chat_with_rag(request: ChatRequest):
         # Keçmişi formatlayıb prompta əlavə etmək üçün oxuyur
         chat_history = format_history_for_prompt(history_manager, limit=3)
 
-        # --- MARKDOWN-u QARŞISINI ALAN ƏMR ---
-        # MARKDOWN_SUPPRESSION = "Cavabı formatlamadan, yalnız təmiz mətn və ya (cədvəl tələb olunursa) təmiz mətn cədvəli kimi təqdim et. Markdown formatından (** bold, * list) qaç."
-        #
-        # # 3. İXTİSASLAŞMIŞ PROMPTLARIN SEÇİLMƏSİ
-        #
-        # if "çatışmazlıq" in request.message.lower() or "tapılmadı" in request.message.lower() or "gap" in request.message.lower():
-        #     # Tələb: Specialized Prompt - Gap Detection
-        #     system_prompt = (
-        #                         "Sən yüksək səviyyəli ESG Auditörsən. Sənin əsas tapşırığın **Standartlar (Kontekst 2)** tərəfindən tələb olunan hər bir elementi **Şirkət Məlumatı (Kontekst 1)** ilə müqayisə etməkdir. "
-        #                         "Cavabında, Kontekst 2-də tələb olunan, lakin Kontekst 1-də **tapılmayan (çatışmayan)** məlumat nöqtələrinin **dəqiq siyahısını** ver. Nəticəni bir **Markdown Cədvəli** formatında təqdim et."
-        #                     ) + MARKDOWN_SUPPRESSION
-        #
-        # elif "dəqiqliyi" in request.message.lower() or "formatı" in request.message.lower() or "rəqəmsal" in request.message.lower() or "quote" in request.message.lower():
-        #     # Tələb: Specialized Prompt - Line-by-Line Analysis
-        #     system_prompt = (
-        #                         "Sən SASB/ISSB standartları üzrə Dəqiqlik Analitiksən. Sənin vəzifən istifadəçinin sualı əsasında Kontekst 1-dən **dəqiq sətiri çıxarmaq** (Quote the exact line) və Kontekst 2-də tələb olunan **spesifik numerik (rəqəmsal) və ya formatlama** tələblərinə uyğun olub-olmadığını yoxlamaqdır. "
-        #                         "Cavabını bir **Markdown Cədvəlində**, təhlil etdiyin **dəqiq sətiri qeyd edərək** təqdim et. Cədvəl [Tələb Olunan Standart], [Şirkət Mətnindən Dəqiq Sitat], [Uyğunluq Statusu] sütunlarından ibarət olsun."
-        #                     ) + MARKDOWN_SUPPRESSION
-        #
-        # else:
-        #     # Ümumi Müqayisə Promptu
-        #     system_prompt = (
-        #                         "Sən Keyfiyyət Təminatı üzrə Ekspert Auditörsən. Sənin məqsədin verilmiş kontekstləri müqayisə etməkdir. Keçmiş məlumatları nəzərə alaraq, Azərbaycan dilində ətraflı cavab ver."
-        #                     ) + MARKDOWN_SUPPRESSION
-
         # YENİ MARKDOWN NƏZARƏTİ
         MARKDOWN_CLEAN = "Cavabı tamamilə formatlamadan, yalnız təmiz mətn kimi təqdim et. Markdown formatından (**, *, #) qaç."
 
         # 3. İXTİSASLAŞMIŞ PROMPTLARIN SEÇİLMƏSİ
+        is_table_required = False
 
         if "çatışmazlıq" in request.message.lower() or "tapılmadı" in request.message.lower() or "gap" in request.message.lower():
+            is_table_required = True
             # Tələb: Specialized Prompt - Gap Detection
             system_prompt = (
                 "Sən yüksək səviyyəli ESG Auditörsən. Sənin əsas tapşırığın **Standartlar (Kontekst 2)** tərəfindən tələb olunan hər bir elementi **Şirkət Məlumatı (Kontekst 1)** ilə müqayisə etməkdir. "
                 "Cavabında, Kontekst 2-də tələb olunan, lakin Kontekst 1-də **tapılmayan (çatışmayan)** məlumat nöqtələrinin **dəqiq siyahısını** ver. "
-                "Nəticəni bir **Markdown Cədvəli** formatında təqdim et. **Cədvəl yaratmaq üçün lazım olan bütün Markdown sintaksisindən istifadə etməyə icazə verilir.**"
-            # <<< DƏYİŞİKLİK
+                "Nəticəni bir **Markdown Cədvəli** formatında təqdim et. Cədvəl yaratmaq üçün lazım olan bütün Markdown sintaksisindən istifadə etməyə icazə verilir."
             )
 
         elif "dəqiqliyi" in request.message.lower() or "formatı" in request.message.lower() or "rəqəmsal" in request.message.lower() or "quote" in request.message.lower():
+            is_table_required = True
             # Tələb: Specialized Prompt - Line-by-Line Analysis
             system_prompt = (
-                "Sən SASB/ISSB standartları üzrə Dəqiqlik Analitiksən... "
+                "Sən SASB/ISSB standartları üzrə Dəqiqlik Analitiksən. Sənin vəzifən istifadəçinin sualı əsasında Kontekst 1-dən **dəqiq sətiri çıxarmaq** (Quote the exact line) və Kontekst 2-də tələb olunan **spesifik numerik (rəqəmsal) və ya formatlama** tələblərinə uyğun olub-olmadığını yoxlamaqdır. "
                 "Cavabını bir **Markdown Cədvəlində**, təhlil etdiyin **dəqiq sətiri qeyd edərək** təqdim et. Cədvəl [Tələb Olunan Standart], [Şirkət Mətnindən Dəqiq Sitat], [Uyğunluq Statusu] sütunlarından ibarət olsun. "
-                "**Cədvəl yaratmaq üçün lazım olan bütün Markdown sintaksisindən istifadə etməyə icazə verilir.**"
-            # <<< DƏYİŞİKLİK
+                "Cədvəl yaratmaq üçün lazım olan bütün Markdown sintaksisindən istifadə etməyə icazə verilir."
             )
 
         else:
             # Ümumi Müqayisə Promptu
             system_prompt = (
                                 "Sən Keyfiyyət Təminatı üzrə Ekspert Auditörsən. Sənin məqsədin verilmiş kontekstləri müqayisə etməkdir. Keçmiş məlumatları nəzərə alaraq, Azərbaycan dilində ətraflı cavab ver."
-                            ) + MARKDOWN_CLEAN  # <<< YALNIZ BURADA TƏMİZ MƏTİN TƏLƏB EDİLİR
-
-
+                            ) + MARKDOWN_CLEAN
 
         # 4. Promptun Hazırlanması
         user_prompt = (
@@ -524,7 +642,15 @@ async def chat_with_rag(request: ChatRequest):
         # 5. Modelə Göndərmə və Cavab Alma
         llm = create_llm_client(os.getenv("GEMINI_API_KEY"))
         response = llm.invoke(input=user_prompt, system=system_prompt)
-        final_response = response.content
+        raw_response = response.content
+
+        # --- Ulduz simvollarının təmizlənməsi ---
+        if not is_table_required:
+            # Yalnız cədvəl tələb olunmayanda (təmiz mətn) təmizləmə aparırıq.
+            final_response = clean_llm_response(raw_response)
+        else:
+            # Cədvəl formatı tələb olunan yerlərdə (Markdown-a ehtiyac var)
+            final_response = raw_response
 
         # 6. SESSION MANAGEMENT: Çat Keçmişini PostgreSQL-ə yaziriq
         history_manager.add_user_message(request.message)
@@ -536,7 +662,11 @@ async def chat_with_rag(request: ChatRequest):
         )
 
     except Exception as e:
+        # --- Gücləndirilmiş Xəta İdarəetməsi ---
+        logger.exception(f"KRİTİK HATA (Chat Endpoint): RAG prosesi zamanı gözlənilməyən xəta: {e}")
+
+        # İstifadəçiyə dostyana xəta mesajını geri qaytarırıq.
         raise HTTPException(
             status_code=500,
-            detail=f"RAG prosesi zamanı daxili xəta: {e}"
+            detail=f"RAG prosesi zamanı daxili xəta baş verdi. Logları və OpenSearch/LLM bağlantılarını yoxlayın. (Xəta növü: {type(e).__name__}, Mesaj: {str(e)[:70]}...)"
         )
