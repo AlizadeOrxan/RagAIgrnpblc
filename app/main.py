@@ -268,13 +268,10 @@ OPENSEARCH_HOST = os.getenv("OPENSEARCH_HOSTS")  # <<< Düzgün Env Var adı
 OPENSEARCH_INDEX = os.getenv("OPENSEARCH_INDEX")
 
 # Engine yaradılması
-try:
-    engine = create_engine(DB_URL)
-    connection = engine.connect()
-    print("PostgreSQL bağlantısı uğurla yoxlandı.")
-    connection.close()
-except Exception as e:
-    print(f"Bağlantı qurularkən xəta baş verdi: {e}")
+engine = create_engine(DB_URL)
+connection = engine.connect()
+print("PostgreSQL bağlantısı uğurla yoxlandı.")
+connection.close()
 
 print(f"DEBUG URL: {DB_URL}")
 
