@@ -111,7 +111,7 @@ async def upload_document(
 ):
     """
     Sənədi qəbul edir, emal edir və OpenSearch vektor bazasına indeksləyir.
-    QEYD: Tətbiq serverində fayl limiti adətən 10-50MB arasında olur (Gunicorn konfiqurasiyası ilə artırılmalıdır).
+    QEYD: Tətbiq serverində fayl limiti adətən 10-50MB arasında olur.
     """
     allowed_types = [
         "application/pdf",
